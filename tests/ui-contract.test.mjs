@@ -8,9 +8,9 @@ const app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 const css=readFileSync(new URL('../src/styles.css',import.meta.url),'utf8');
 
 test('all referenced UI nodes have unique DOM IDs',()=>{
-  const ids=[...html.matchAll(/\\bid="([^"]+)"/g)].map(m=>m[1]);
+  const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
   assert.equal(new Set(ids).size,ids.length);
-  for(const m of app.matchAll(/\\$\\('([^']+)'\\)/g))
+  for(const m of app.matchAll(/\$\('([^']+)'\)/g))
     assert.ok(ids.includes(m[1]),'Missing DOM node '+m[1]);
 });
 test('all HTML translation keys exist in TR and EN',()=>{
@@ -21,7 +21,7 @@ test('all HTML translation keys exist in TR and EN',()=>{
   assert.equal(tools.length,6);
 });
 test('PDFForge does not upload the documents or add telemetry',()=>{
-  assert.doesNotMatch(app,/fetch\\s*\\(|XMLHttpRequest|sendBeacon|WebSocket/);
+  assert.doesNotMatch(app,/fetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket/);
   assert.match(html,/form-action 'none'/);
-  assert.match(css,/@media\\(max-width:540px\\)/);
+  assert.match(css,/@media\(max-width:540px\)/);
 });
