@@ -44,3 +44,7 @@ This repository is set up to **build and deploy automatically**, but the owner m
 ## Verification
 
 `npm run check` runs page-range unit tests, UI/translation contracts, real `pdf-lib` and ZIP integration tests, syntax checks and a Vite production build. The document-processing engine is browser-side; the browser receives its PDF.js worker and libraries from the packaged site. The two most memory-sensitive operations (thumbnails and document import) use safeguards.
+
+## Release tracking
+
+Version 0.2.0 is the first verified implementation. Automated checks cover real merge/split PDF operations, UI contracts, bilingual content and the optimized static build. GitHub Pages publishes from the `main` branch via Actions when the repository's Pages source is set to **GitHub Actions**.
