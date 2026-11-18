@@ -1,6 +1,6 @@
 {
   "name": "pdfforge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Privacy-first PDF tools from ceskacan",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.mjs",
-    "check": "npm run test && node --check src/app.js && node --check src/engine.js && node --check src/i18n.js"
+    "check": "npm run test && node --check src/app.js && node --check src/engine.js && node --check src/pdf-core.js && node --check src/i18n.js && npm run build"
   },
   "dependencies": {
     "pdf-lib": "1.17.1",
@@ -19,5 +19,7 @@
   "devDependencies": {
     "vite": "6.3.6"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }

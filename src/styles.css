@@ -31,3 +31,9 @@
 .result-panel strong,.result-panel p{overflow-wrap:anywhere}
 @media(max-width:560px){.page-grid-nav{gap:1rem}.page-card-controls .page-control{min-width:30px;min-height:32px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* Compact page controls never overflow very narrow phones. */
+@media (max-width: 380px) {
+  .page-grid { grid-template-columns: minmax(0, 1fr); }
+  .page-card-controls .page-control { min-width: 38px; min-height: 38px; }
+}

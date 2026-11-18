@@ -1,4 +1,4 @@
-name: PDFForge · Test and Publish
+name: PDFForge · Verify & Publish
 on:
   push:
     branches: [main]
@@ -13,31 +13,48 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages_enabled: ${{ steps.pages.outputs.enabled }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: Install dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Check code and business logic
+      - name: Test real PDF operations and UI contracts
         run: npm run check
       - name: Build site
         run: npm run build
-      - uses: actions/upload-pages-artifact@v3
+      - name: Check GitHub Pages configuration
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          status=$(curl -sS -o /tmp/pages.json -w '%{http_code}' \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$REPO/pages")
+          if [ "$status" = "200" ] && grep -Eq '"build_type" *: *"workflow"' /tmp/pages.json; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+            echo "::warning::GitHub Pages is not enabled with GitHub Actions. Enable it at Settings > Pages > Source: GitHub Actions."
+          fi
+      - name: Upload GitHub Pages artifact
+        if: steps.pages.outputs.enabled == 'true'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist/
   deploy:
+    if: needs.build.outputs.pages_enabled == 'true'
     needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - name: Publish to GitHub Pages
+      - name: Publish
         id: deploy
         uses: actions/deploy-pages@v4

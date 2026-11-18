@@ -36,3 +36,11 @@ npm run build
 ## License
 
 MIT — © 2026 Sadık Can Çeşka. Dependencies retain their original open-source licenses.
+
+## GitHub Pages activation
+
+This repository is set up to **build and deploy automatically**, but the owner must activate GitHub Pages once: **Settings → Pages → Build and deployment → Source: GitHub Actions**. The repository's workflow token cannot enable Pages on its own. Until activation, CI verifies and builds without attempting a deployment; after activation, use **Actions → PDFForge · Verify & Publish → Run workflow**.
+
+## Verification
+
+`npm run check` runs page-range unit tests, UI/translation contracts, real `pdf-lib` and ZIP integration tests, syntax checks and a Vite production build. The document-processing engine is browser-side; the browser receives its PDF.js worker and libraries from the packaged site. The two most memory-sensitive operations (thumbnails and document import) use safeguards.

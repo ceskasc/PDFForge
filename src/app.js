@@ -8,13 +8,24 @@ const get = key => translations[language][key];
 let language = 'tr';
 try { if (localStorage.getItem('pdfforge-language') === 'en') language = 'en'; } catch {}
 const state = {
-  tool: 'merge', docs: [], pages: [], busy: false, gridPage: 0, previewSeq: 0,
+  tool: 'merge', docs: [], pages: [], busy: false, importing: false, gridPage: 0, previewSeq: 0,
   outputUrl: null, output: null,
   options: { range: '1', quality: 62, paper: 'a4', margin: 18, watermark: 'TASLAK', opacity: 22 }
 };
 const PAGE_GRID_SIZE = 24;
 const MAX_TOTAL_PAGES = 220;
 const thumbnails = new Map();
+const thumbnailTasks = [];
+let thumbnailsInFlight = 0;
+const MAX_CONCURRENT_PREVIEWS = 2;
+function pumpThumbnails() {
+  while (thumbnailsInFlight < MAX_CONCURRENT_PREVIEWS && thumbnailTasks.length) {
+    const task = thumbnailTasks.shift();
+    if (task.serial !== state.previewSeq) continue;
+    thumbnailsInFlight++;
+    void task.run().finally(() => { thumbnailsInFlight--; pumpThumbnails(); });
+  }
+}
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
 const svg = (name, contents = '') => '<svg viewBox="0 0 24 24" aria-hidden="true">' + (contents || '<path d="M12 4v16M4 12h16"/>') + '</svg>';
 const actionIcons = {
@@ -70,7 +81,7 @@ function renderTools() {
   tools.forEach((tool, index) => {
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'tool-button' + (state.tool === tool.id ? ' active' : '');
-    button.dataset.tool = tool.id; button.disabled = state.busy;
+    button.dataset.tool = tool.id; button.disabled = state.busy || state.importing;
     if (state.tool === tool.id) button.setAttribute('aria-current', 'true');
     button.innerHTML = '<span class="tool-button-icon">' + iconMarkup(tool.icon) + '</span><span><span class="tool-button-title"></span><span class="tool-button-sub"></span></span>';
     button.querySelector('.tool-button-title').textContent = tool.title[language];
@@ -102,7 +113,7 @@ async function clearAll(silent = false) {
   if (!silent && docs.length) toast(get('allRemoved'));
 }
 async function switchTool(id) {
-  if (state.busy || id === state.tool) return;
+  if (state.busy || state.importing || id === state.tool) return;
   if (state.docs.length && !window.confirm(get('confirmSwitch'))) return;
   await clearAll(true);
   state.tool = id;
@@ -117,12 +128,13 @@ function createButton(label, action, icon, disabled = false) {
   return button;
 }
 function updateBusy() {
-  $('runButton').disabled = state.busy || !state.docs.length || !state.pages.length;
-  $('fileInput').disabled = state.busy;
-  $('chooseFiles').disabled = state.busy;
-  $('addMore').disabled = state.busy;
-  $('clearAll').disabled = state.busy;
-  $('dropZone').setAttribute('aria-disabled', String(state.busy));
+  const locked = state.busy || state.importing;
+  $('runButton').disabled = locked || !state.docs.length || !state.pages.length;
+  $('fileInput').disabled = locked;
+  $('chooseFiles').disabled = locked;
+  $('addMore').disabled = locked;
+  $('clearAll').disabled = locked;
+  $('dropZone').setAttribute('aria-disabled', String(locked));
   renderTools();
 }
 function renderFiles() {
@@ -130,6 +142,7 @@ function renderFiles() {
   const filled = state.docs.length > 0;
   $('dropZone').hidden = filled;
   $('uploadTopline').hidden = !filled;
+  $('addMore').hidden = filled && !['merge','images'].includes(state.tool);
   $('actionForm').hidden = !filled;
   $('fileSummary').textContent = get('fileCount')(state.docs.length);
   for (const doc of state.docs) {
@@ -227,6 +240,7 @@ async function setPreviewImage(element, doc, page, key, serial) {
 }
 function renderPages(){
   const grid=$('pageGrid');grid.replaceChildren();
+  thumbnailTasks.length = 0;
   const total=state.pages.length;
   $('pagesTopline').hidden=!total;
   if(!total)return;
@@ -261,7 +275,8 @@ function renderPages(){
     }
     card.append(preview,footer);grid.append(card);
     const key=item.docId+':'+item.pageIndex+':'+item.rotation;
-    void setPreviewImage(preview,doc,item,key,serial);
+    thumbnailTasks.push({serial,run:()=>setPreviewImage(preview,doc,item,key,serial)});
+    pumpThumbnails();
   }
   if(pageCount>1){
     const nav=document.createElement('div');nav.className='page-grid-nav';
@@ -272,7 +287,12 @@ function renderPages(){
   }
 }
 async function addFiles(newFiles){
-  if(state.busy||!newFiles.length)return;
+  if(state.busy||state.importing||!newFiles.length)return;
+  if(state.docs.length && !['merge','images'].includes(state.tool)) {
+    setMessage(get('singleFileOnly'),true);return;
+  }
+  state.importing=true;updateBusy();
+  try {
   resetOutput();setMessage();
   const images=state.tool==='images';
   const allowed=file=>images?(/\.(png|jpg|jpeg|webp)$/i.test(file.name)||['image/png','image/jpeg','image/webp'].includes(file.type)):(/\.pdf$/i.test(file.name)||file.type==='application/pdf');
@@ -298,9 +318,13 @@ async function addFiles(newFiles){
   renderFiles();renderPages();
   if(added)toast(get('toastAdd')(added));
   if(rejected&&!$('feedback').textContent)setMessage(get('toastSkip')(rejected),true);
+  } finally {
+    state.importing=false;
+    updateBusy();
+  }
 }
 async function process(){
-  if(state.busy||!state.docs.length)return;
+  if(state.busy||state.importing||!state.docs.length)return;
   if(!state.pages.length){setMessage(get('noPages'),true);return;}
   state.busy=true;setMessage();resetOutput();updateBusy();
   $('progressArea').hidden=false;$('runLabel').textContent=get('processing');
@@ -340,9 +364,9 @@ $('themeButton').addEventListener('click',()=>applyTheme(document.documentElemen
 $('langButton').addEventListener('click',()=>{language=language==='tr'?'en':'tr';try{localStorage.setItem('pdfforge-language',language);}catch{}translatePage();});
 $('chooseFiles').addEventListener('click',e=>{e.stopPropagation();$('fileInput').click();});
 $('addMore').addEventListener('click',()=>$('fileInput').click());
-$('clearAll').addEventListener('click',()=>{if(!state.busy)void clearAll();});
+$('clearAll').addEventListener('click',()=>{if(!state.busy&&!state.importing)void clearAll();});
 $('fileInput').addEventListener('change',event=>{void addFiles([...event.target.files]);});
-$('dropZone').addEventListener('click',event=>{if(event.target.closest('button'))return;if(!state.busy)$('fileInput').click();});
+$('dropZone').addEventListener('click',event=>{if(event.target.closest('button'))return;if(!state.busy&&!state.importing)$('fileInput').click();});
 $('dropZone').addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)&&event.target===$('dropZone')){event.preventDefault();$('fileInput').click();}});
 $('dropZone').addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files')){event.preventDefault();$('dropZone').classList.add('is-dragover');}});
 $('dropZone').addEventListener('dragleave',()=>$('dropZone').classList.remove('is-dragover'));
